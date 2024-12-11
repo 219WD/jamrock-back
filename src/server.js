@@ -11,7 +11,7 @@ server.use(express.json());
 
 // Configuración de CORS
 const corsOptions = {
-  origin: ['https://219food.vercel.app'], // Dominios permitidos
+  origin: ['https://219foodpremium.vercel.app/'], // Dominios permitidos
   methods: ['GET', 'POST'], // Métodos permitidos
   allowedHeaders: ['Content-Type', 'Authorization'], // Encabezados permitidos
 };
