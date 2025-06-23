@@ -5,11 +5,12 @@ dotenv.config();
 
 const Mercado_Pago = Router();
 
+// Configuración clásica
 mercadopago.configure({
   access_token: process.env.ACCESS_TOKEN || "",
 });
 
-Mercado_Pago.post("/", async (req, res) => {
+Mercado_Pago.post("/pagar", async (req, res) => {
   const items = req.body;
 
   try {
@@ -17,7 +18,6 @@ Mercado_Pago.post("/", async (req, res) => {
       return res.status(400).json({ error: "El carrito está vacío" });
     }
 
-    // Crear preferencia en Mercado Pago
     const preference = {
       items: items.map((item) => ({
         title: item.title,
@@ -28,7 +28,7 @@ Mercado_Pago.post("/", async (req, res) => {
         currency_id: "ARS",
       })),
       back_urls: {
-        success: process.env.SUCCESS_URL || "http://localhost:5173/",
+        success: process.env.SUCCESS_URL || "https://219labs-descuento.vercel.app/",
         failure: process.env.FAILURE_URL || "http://localhost:3000/fallo",
       },
       auto_return: "approved",
@@ -37,10 +37,9 @@ Mercado_Pago.post("/", async (req, res) => {
     const response = await mercadopago.preferences.create(preference);
     return res.status(200).json({ init_point: response.body.init_point });
   } catch (error) {
-    console.error("Error al procesar la solicitud:", error.message, error.stack);
+    console.error("Error al procesar la solicitud:", error.message);
     return res.status(500).json({ error: "Hubo un error al procesar la solicitud" });
   }
 });
-
 
 module.exports = Mercado_Pago;
