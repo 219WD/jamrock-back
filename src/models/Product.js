@@ -28,6 +28,16 @@ const ProductSchema = new Schema({
   isActive: {
     type: Boolean,
     default: true,
+  },
+  rating: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 5
+  },
+  numReviews: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

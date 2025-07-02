@@ -8,6 +8,7 @@ const {
   updateCartItems,
   checkoutCart,
   updateCartStatus,
+  addCartProductRating
 } = require("../controllers/cartController");
 const isAdmin = require("../middlewares/isAdmin");
 
@@ -31,5 +32,7 @@ router.put("/checkout/:cartId", checkoutCart);
 
 // PUT /cart/status/:cartId → actualizar estado del carrito (solo admin)
 router.put("/status/:cartId", isAdmin, updateCartStatus);
+
+router.post('/:cartId/rate/:productId', addCartProductRating);
 
 module.exports = router;

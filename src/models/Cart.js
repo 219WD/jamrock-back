@@ -42,9 +42,33 @@ const CartSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['pendiente', 'pagado', 'cancelado', 'entregado'],
-    default: 'pendiente'
-  }
+    enum: ['inicializado', 'pendiente', 'pagado', 'preparacion', 'cancelado', 'entregado'],
+    default: 'inicializado'
+  },
+  receiptUrl: {
+    type: String, // URL de Cloudinary o donde subas el comprobante
+    required: false,
+  },
+  ratings: [
+    {
+      productId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Product',
+        required: true
+      },
+      stars: {
+        type: Number,
+        min: 1,
+        max: 5,
+        required: true
+      },
+      comment: { type: String },
+      ratedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }
+  ]
 }, {
   timestamps: true
 });

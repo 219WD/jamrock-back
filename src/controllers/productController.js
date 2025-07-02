@@ -94,6 +94,57 @@ const toggleProductStatus = async (req, res) => {
   }
 };
 
+// Agregar una calificación (solo rating promedio)
+const addProductReview = async (req, res) => {
+  const { rating } = req.body;
+  const { id: productId } = req.params;
+  const { cartId } = req.query; // Opcional: si viene de un carrito específico
+
+  try {
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
+
+    // Validar rating
+    const parsedRating = Number(rating);
+    if (parsedRating < 1 || parsedRating > 5) {
+      return res.status(400).json({ message: 'El rating debe estar entre 1 y 5' });
+    }
+
+    // Actualizar rating del producto
+    const totalRating = product.rating * product.numReviews + parsedRating;
+    product.numReviews += 1;
+    product.rating = totalRating / product.numReviews;
+    await product.save();
+
+    // Si hay un cartId, actualizar también el rating en el carrito
+    if (cartId) {
+      const cart = await Cart.findById(cartId);
+      if (cart) {
+        const existingRatingIndex = cart.ratings.findIndex(
+          r => r.productId.toString() === productId.toString()
+        );
+
+        if (existingRatingIndex !== -1) {
+          cart.ratings[existingRatingIndex].stars = parsedRating;
+        } else {
+          cart.ratings.push({ productId, stars: parsedRating });
+        }
+
+        await cart.save();
+      }
+    }
+
+    res.status(200).json({
+      message: 'Rating agregado con éxito',
+      rating: product.rating,
+      numReviews: product.numReviews
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al agregar rating', error });
+  }
+};
+
+
 
 module.exports = {
   getProducts,
@@ -101,5 +152,6 @@ module.exports = {
   createProduct,
   updateProduct,
   toggleProductStatus,
-  deleteProduct
+  deleteProduct,
+  addProductReview
 };

@@ -6,7 +6,8 @@ const {
   createProduct,
   updateProduct,
   toggleProductStatus,
-  deleteProduct
+  deleteProduct,
+  addProductReview
 } = require('../controllers/productController');
 
 // Middlewares de autenticación/autorización (si los usas)
@@ -23,5 +24,8 @@ router.delete('/deleteProduct/:id', isAdmin, deleteProduct);
 
 // Actualizar isPartner (PATCH) - Alternar estado
 router.patch('/toggle-status/:id', isAdmin, toggleProductStatus);
+
+// Rutas para reseñas de productos
+router.post('/:id/review', addProductReview);
 
 module.exports = router;

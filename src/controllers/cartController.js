@@ -30,39 +30,74 @@ const getLastCartByUser = async (req, res) => {
 };
 
 // 👉 Agregar un producto al carrito
+// 👉 Agregar un producto al carrito (corregido)
 const addToCart = async (req, res) => {
   try {
     const { userId, items, paymentMethod, deliveryMethod, shippingAddress } = req.body;
 
-    let totalAmount = 0;
+    if (!userId || !items || items.length === 0) {
+      return res.status(400).json({ message: "Faltan datos del carrito" });
+    }
 
-    // Calcular el total y verificar stock
+    // Buscar el último carrito del usuario
+    const lastCart = await Cart.findOne({ userId }).sort({ createdAt: -1 });
+
+    // Validar productos y calcular totalAmount
+    let totalAmount = 0;
     for (const item of items) {
       const product = await Product.findById(item.productId);
-      if (!product) return res.status(404).json({ message: "Producto no encontrado" });
+      if (!product) {
+        return res.status(404).json({ message: `Producto no encontrado: ${item.productId}` });
+      }
 
       if (item.quantity > product.stock) {
         return res.status(400).json({ message: `Stock insuficiente para ${product.title}` });
       }
 
-      totalAmount += item.quantity * product.price;
+      totalAmount += product.price * item.quantity;
     }
 
-    const cart = new Cart({
-      userId,
-      items,
-      paymentMethod,
-      deliveryMethod,
-      shippingAddress,
-      totalAmount,
-    });
+    // Si no hay carrito o el último está entregado, crear uno nuevo
+    if (!lastCart || lastCart.status === "entregado" || lastCart.status === "pagado") {
+      const newCart = new Cart({
+        userId,
+        items,
+        paymentMethod: paymentMethod || "efectivo",
+        deliveryMethod: deliveryMethod || "retiro",
+        shippingAddress: shippingAddress || {
+          name: "Usuario Nuevo",
+          address: "Sin dirección",
+          phone: "0000000000"
+        },
+        totalAmount,
+        status: "inicializado"
+      });
 
-    await cart.save();
-    res.status(201).json(cart);
+      await newCart.save();
+      return res.status(201).json(newCart);
+    }
+
+    // Si el carrito está pendiente, agregar o actualizar productos
+    for (const item of items) {
+      const index = lastCart.items.findIndex(i => i.productId.toString() === item.productId);
+      if (index !== -1) {
+        lastCart.items[index].quantity += item.quantity;
+      } else {
+        lastCart.items.push(item);
+      }
+    }
+
+    // Recalcular total
+    lastCart.totalAmount += totalAmount;
+    await lastCart.save();
+
+    return res.status(200).json(lastCart);
   } catch (err) {
+    console.error("Error en addToCart:", err);
     res.status(500).json({ message: err.message });
   }
 };
+
 
 // 👉 Obtener el carrito de un usuario
 const getCartByUser = async (req, res) => {
@@ -142,7 +177,10 @@ const checkoutCart = async (req, res) => {
 
     const cart = await Cart.findById(cartId);
     if (!cart) return res.status(404).json({ message: "Carrito no encontrado" });
-    if (cart.status !== "pendiente") return res.status(400).json({ message: "Carrito ya procesado" });
+    // ✅ Aceptar también carritos con estado 'inicializado'
+    if (["pagado", "preparacion", "entregado", "cancelado"].includes(cart.status)) {
+      return res.status(400).json({ message: "Carrito ya procesado" });
+    }
 
     // Actualizar campos
     cart.paymentMethod = paymentMethod;
@@ -156,7 +194,12 @@ const checkoutCart = async (req, res) => {
 
     if (receiptUrl) cart.receiptUrl = receiptUrl;
 
-    cart.status = "pagado";
+    if (paymentMethod === 'transferencia') {
+      cart.status = 'pendiente'; // necesita comprobante
+    } else {
+      cart.status = 'pagado'; // tarjeta o efectivo
+    }
+
     await cart.save();
 
     return res.status(200).json(cart);
@@ -170,7 +213,7 @@ const updateCartStatus = async (req, res) => {
   const { cartId } = req.params;
   const { status } = req.body;
 
-  const validStatuses = ["pendiente", "pagado", "cancelado", "entregado"];
+  const validStatuses = ["pendiente", "pagado", "preparacion", "cancelado", "entregado"];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: "Estado inválido" });
   }
@@ -179,6 +222,11 @@ const updateCartStatus = async (req, res) => {
     const cart = await Cart.findById(cartId);
     if (!cart) {
       return res.status(404).json({ message: "Carrito no encontrado" });
+    }
+
+    // 👇 Validación extra: solo permitir preparacion si ya fue pagado o tiene comprobante
+    if (status === "preparacion" && !["pagado", "pendiente"].includes(cart.status)) {
+      return res.status(400).json({ message: "Solo se puede pasar a preparación si el pedido está pagado o pendiente de comprobante" });
     }
 
     cart.status = status;
@@ -194,6 +242,52 @@ const updateCartStatus = async (req, res) => {
   }
 };
 
+// Agregar rating a productos en el carrito
+const addCartProductRating = async (req, res) => {
+  const { cartId, productId } = req.params;
+  const { stars, comment } = req.body;
+
+  try {
+    const cart = await Cart.findById(cartId);
+    if (!cart) return res.status(404).json({ message: 'Carrito no encontrado' });
+
+    // Verificar que el producto está en el carrito
+    const productInCart = cart.items.some(item =>
+      item.productId.toString() === productId.toString()
+    );
+
+    if (!productInCart) {
+      return res.status(400).json({ message: 'Producto no encontrado en este carrito' });
+    }
+
+    // Verificar que el carrito está entregado
+    if (cart.status !== 'entregado') {
+      return res.status(400).json({ message: 'Solo puedes calificar productos de pedidos entregados' });
+    }
+
+    // Actualizar o agregar rating
+    const existingRatingIndex = cart.ratings.findIndex(
+      r => r.productId.toString() === productId.toString()
+    );
+
+    if (existingRatingIndex !== -1) {
+      cart.ratings[existingRatingIndex] = {
+        productId,
+        stars,
+        comment,
+        ratedAt: new Date()
+      };
+    } else {
+      cart.ratings.push({ productId, stars, comment });
+    }
+
+    await cart.save();
+    res.status(200).json(cart);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al calificar el producto', error });
+  }
+};
+
 module.exports = {
   getAllCarts,
   getLastCartByUser,
@@ -202,4 +296,5 @@ module.exports = {
   updateCartItems,
   checkoutCart,
   updateCartStatus,
+  addCartProductRating
 };
