@@ -33,6 +33,8 @@ router.put("/checkout/:cartId", checkoutCart);
 // PUT /cart/status/:cartId → actualizar estado del carrito (solo admin)
 router.put("/status/:cartId", isAdmin, updateCartStatus);
 
+// POST /cart/:cartId/rate/:productId → agregar rating a productos en el carrito
+// Solo se puede calificar productos de pedidos entregados
 router.post('/:cartId/rate/:productId', addCartProductRating);
 
 module.exports = router;
