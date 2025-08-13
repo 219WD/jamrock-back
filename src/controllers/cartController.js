@@ -175,14 +175,35 @@ const checkoutCart = async (req, res) => {
       receiptUrl
     } = req.body;
 
-    const cart = await Cart.findById(cartId);
+    const cart = await Cart.findById(cartId).populate("items.productId");
     if (!cart) return res.status(404).json({ message: "Carrito no encontrado" });
-    // ✅ Aceptar también carritos con estado 'inicializado'
+
+    // Check if the cart is in a valid state for checkout
     if (["pagado", "preparacion", "entregado", "cancelado"].includes(cart.status)) {
       return res.status(400).json({ message: "Carrito ya procesado" });
     }
 
-    // Actualizar campos
+    // Validate stock for each product in the cart
+    for (const item of cart.items) {
+      const product = item.productId; // Populated product
+      if (!product) {
+        return res.status(404).json({ message: `Producto no encontrado: ${item.productId}` });
+      }
+      if (item.quantity > product.stock) {
+        return res.status(400).json({
+          message: `Stock insuficiente para ${product.title}. Disponible: ${product.stock}, solicitado: ${item.quantity}`
+        });
+      }
+    }
+
+    // Update stock for each product
+    for (const item of cart.items) {
+      const product = item.productId;
+      product.stock -= item.quantity; // Decrease stock
+      await product.save(); // Save updated product
+    }
+
+    // Update cart fields
     cart.paymentMethod = paymentMethod;
     cart.deliveryMethod = deliveryMethod;
 
@@ -194,10 +215,11 @@ const checkoutCart = async (req, res) => {
 
     if (receiptUrl) cart.receiptUrl = receiptUrl;
 
+    // Set cart status based on payment method
     if (paymentMethod === 'transferencia') {
-      cart.status = 'pendiente'; // necesita comprobante
+      cart.status = 'pendiente'; // Needs receipt verification
     } else {
-      cart.status = 'pagado'; // tarjeta o efectivo
+      cart.status = 'pagado'; // Card or cash
     }
 
     await cart.save();

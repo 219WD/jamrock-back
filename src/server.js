@@ -6,6 +6,10 @@ const PartnerRouter = require("./router/PartnerRoutes");
 const UserRouter = require("./router/UserRoutes");
 const cartRouter = require("./router/cartRoutes");
 const productRoutes = require("./router/productRoutes");
+const AntecedentesRoutes = require("./router/antecedentesRoutes");
+const EspecialistaRoutes = require("./router/especialistaRoutes");
+const PacienteRoutes = require("./router/pacienteRoutes");
+const TurnoRoutes = require("./router/turnoRoutes");
 
 const express = require("express");
 const cors = require("cors");
@@ -45,6 +49,10 @@ server.use("/login", LoginRouter);
 server.use("/partners", PartnerRouter);
 server.use("/users", UserRouter);
 server.use("/cart", cartRouter);
-server.use('/products', productRoutes);
+server.use("/products", productRoutes);
+server.use('/antecedentes', AntecedentesRoutes);
+server.use("/especialistas", EspecialistaRoutes);
+server.use("/pacientes", PacienteRoutes);
+server.use("/turnos", TurnoRoutes);
 
 module.exports = server;

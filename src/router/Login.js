@@ -23,7 +23,12 @@ router.post('/login', async (req, res) => {
         }
 
         const token = jwt.sign(
-            { id: user._id, isAdmin: user.isAdmin },
+            {
+                id: user._id, isAdmin: user.isAdmin, isPartner: user.isPartner,
+                isPaciente: user.isPaciente,
+                isMedico: user.isMedico,
+                isSecretaria: user.isSecretaria
+            },
             JWT_SECRET,
             { expiresIn: '1h' }
         );
@@ -37,6 +42,9 @@ router.post('/login', async (req, res) => {
                 email: user.email,
                 isAdmin: user.isAdmin,
                 isPartner: user.isPartner,
+                isPaciente: user.isPaciente,
+                isMedico: user.isMedico,
+                isSecretaria: user.isSecretaria,
             }
         });
     } catch (error) {

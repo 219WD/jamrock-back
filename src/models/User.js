@@ -18,10 +18,13 @@ const UserSchema = new Schema({
         type: String,
         required: true,
     },
+    isMedico: { type: Boolean, default: false },
+    isPaciente: { type: Boolean, default: false },
     isAdmin: {
         type: Boolean,
         default: false,
     },
+    isSecretaria: { type: Boolean, default: false },
     isPartner: {
         type: Boolean,
         default: false,

@@ -131,11 +131,46 @@ const updatePendingStatus = async (req, res) => {
   }
 };
 
+// PATCH cambiar isSecretaria
+const isSecretariaStatus = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Alternar el valor de isSecretaria
+    user.isSecretaria = !user.isSecretaria;
+    await user.save();
+
+    res.status(200).json({
+      message: `El usuario ahora ${user.isSecretaria ? 'es' : 'no es'} secretaria.`,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isPartner: user.isPartner,
+        isAdmin: user.isAdmin,
+        isSecretaria: user.isSecretaria
+        // Agrega otros campos que quieras devolver
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Error al actualizar isSecretaria',
+      details: err.message
+    });
+  }
+};
+
+
+
 module.exports = {
   getAllUsers,
   getUserById,
   updateAdminStatus,
   updatePartnerStatus,
   updatePendingStatus,
+  isSecretariaStatus,
   searchUsers,
 };

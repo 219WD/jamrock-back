@@ -7,26 +7,31 @@ const {
   updateAdminStatus,
   updatePartnerStatus,
   updatePendingStatus,
+  isSecretariaStatus,
   searchUsers
 } = require('../controllers/UserController');
-const isAdmin = require('../middlewares/isAdmin');
+const { authenticate, isAdmin, isAdminOrMedico } = require('../middlewares/authMiddleware');
 
-// Obtener todos los usuarios
-router.get('/getUsers', isAdmin, getAllUsers);
+// Obtener todos los usuarios (accesible para admin y médicos)
+router.get('/getUsers', authenticate, isAdminOrMedico, getAllUsers);
 
-// Obtener un usuario por ID
+// Obtener un usuario por ID (accesible para todos los usuarios autenticados)
 router.get('/getUser/:id', getUserById);
 
-// Search
-router.get('/search', isAdmin, searchUsers);
+// Search (accesible para admin y médicos)
+router.get('/search', authenticate, isAdminOrMedico, searchUsers);
 
-// Actualizar isPartner (PATCH) - Alternar estado
-router.patch('/togglePartner/:id', isAdmin, updatePartnerStatus);
+// Actualizar isPartner (PATCH) - Alternar estado (solo admin)
+router.patch('/togglePartner/:id', authenticate, isAdmin, updatePartnerStatus);
 
-// Actualizar isAdmin (PATCH)
-router.patch('/isAdmin/:id', isAdmin, updateAdminStatus);
+// Actualizar isAdmin (PATCH) (solo admin)
+router.patch('/isAdmin/:id', authenticate, isAdmin, updateAdminStatus);
 
-// Actualizar isPending (PATCH)
-router.patch('/isPending/:id', isAdmin, updatePendingStatus);
+
+// Actualizar isSecretaria (PATCH) - Alternar estado (solo admin)
+router.patch('/isSecretaria/:id', authenticate, isAdmin, isSecretariaStatus);
+
+// Actualizar isPending (PATCH) (solo admin)
+router.patch('/isPending/:id', authenticate, isAdmin, updatePendingStatus);
 
 module.exports = router;
