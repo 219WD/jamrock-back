@@ -1,4 +1,4 @@
-const Antecedentes = require('../models/antecedentes');
+const Antecedentes = require('../models/Antecedentes');
 const Paciente = require('../models/Paciente');
 const User = require('../models/User');
 const Partner = require('../models/Partner');
