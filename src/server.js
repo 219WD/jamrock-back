@@ -10,6 +10,7 @@ const AntecedentesRoutes = require("./router/antecedentesRoutes");
 const EspecialistaRoutes = require("./router/especialistaRoutes");
 const PacienteRoutes = require("./router/pacienteRoutes");
 const TurnoRoutes = require("./router/turnoRoutes");
+const authRouter = require("./router/authRoutes");
 
 const express = require("express");
 const cors = require("cors");
@@ -46,6 +47,7 @@ server.use(cors(corsOptions));
 server.use("/Mercado_Pago", Mercado_Pago_Router);
 server.use("/register", RegisterRouter);
 server.use("/login", LoginRouter);
+server.use("/auth", authRouter);
 server.use("/partners", PartnerRouter);
 server.use("/users", UserRouter);
 server.use("/cart", cartRouter);

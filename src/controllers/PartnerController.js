@@ -1,6 +1,7 @@
 const mongoose = require('mongoose'); 
 const Partner = require('../models/Partner');
 const User = require('../models/User');
+const transporter = require('../config/nodemailer');
 
 // Crear un nuevo partner
 const createPartner = async (req, res) => {
@@ -14,14 +15,43 @@ const createPartner = async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado para asociar el partner' });
     }
 
-    // Actualizar los campos del usuario
+    // Actualizar los campos del usuario - SOLO registrar datos, NO aprobar
     user.partnerData = partner._id;
+    // NO establecer isPartner = true todavía (queda como false por defecto)
     await user.save();
 
+    // Responder inmediatamente
     res.status(201).json({
-      message: 'Partner creado correctamente',
+      message: 'Solicitud de partner enviada correctamente. Esperando aprobación.',
       partner
     });
+
+    // ENVIAR CORREO DE SOLICITUD RECIBIDA DE FORMA ASÍNCRONA
+    setTimeout(async () => {
+      try {
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: user.email,
+          subject: 'Solicitud de Partner recibida - Jamrock',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #333; text-align: center;">¡Solicitud recibida!</h2>
+              <p>Hola ${user.name},</p>
+              <p>Hemos recibido tu solicitud para convertirte en socio de Jamrock.</p>
+              <p>Tu solicitud está ahora en revisión. Te notificaremos por correo una vez que sea procesada.</p>
+              <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
+              <p>¡Saludos cordiales!<br>El equipo de Jamrock</p>
+            </div>
+          `
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`Correo de solicitud recibida enviado a: ${user.email}`);
+      } catch (emailError) {
+        console.error('Error al enviar el correo de solicitud:', emailError);
+      }
+    }, 100);
+
   } catch (err) {
     res.status(400).json({ error: 'Error al crear el partner', details: err.message });
   }
@@ -81,6 +111,36 @@ const getPartnerByUserId = async (req, res) => {
   }
 };
 
+// Obtener los datos del partner del usuario autenticado
+const getMyPartnerData = async (req, res) => {
+  try {
+    console.log("Buscando partner para usuario:", req.user._id);
+    
+    const partner = await Partner.findOne({ userId: req.user._id })
+      .populate('userId', 'name email');
+
+    if (!partner) {
+      return res.status(404).json({ 
+        error: "No se encontró partner para este usuario",
+        exists: false
+      });
+    }
+    
+    res.status(200).json({
+      ...partner.toObject(),
+      exists: true,
+      userId: partner.userId._id,
+      userName: partner.userId.name,
+      userEmail: partner.userId.email
+    });
+  } catch (err) {
+    console.error("Error en getMyPartnerData:", err);
+    res.status(500).json({ 
+      error: "Error al buscar el partner",
+      details: err.message 
+    });
+  }
+};
 
 // Actualizar un partner - Versión mejorada
 const updatePartner = async (req, res) => {
@@ -159,6 +219,7 @@ module.exports = {
   getAllPartners,
   getPartnerById,
   getPartnerByUserId,
+  getMyPartnerData,
   updatePartner,
   deletePartner
 };

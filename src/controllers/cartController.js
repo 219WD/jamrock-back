@@ -13,10 +13,16 @@ const getAllCarts = async (req, res) => {
   }
 };
 
-// 👉 Obtener el último carrito de un usuario (ordenado por fecha)
+// 👉 Obtener el último carrito de un usuario
 const getLastCartByUser = async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Verificar que el usuario solo acceda a su propio carrito, a menos que sea admin/secretaria
+    if (req.user._id.toString() !== userId && !req.user.isAdmin && !req.user.isSecretaria) {
+      return res.status(403).json({ message: "No tienes permisos para ver este carrito" });
+    }
+
     const lastCart = await Cart.findOne({ userId })
       .sort({ createdAt: -1 })
       .populate("items.productId")
@@ -30,10 +36,14 @@ const getLastCartByUser = async (req, res) => {
 };
 
 // 👉 Agregar un producto al carrito
-// 👉 Agregar un producto al carrito (corregido)
 const addToCart = async (req, res) => {
   try {
     const { userId, items, paymentMethod, deliveryMethod, shippingAddress } = req.body;
+
+    // Verificar que el usuario solo agregue a su propio carrito
+    if (req.user._id.toString() !== userId && !req.user.isAdmin && !req.user.isSecretaria) {
+      return res.status(403).json({ message: "No puedes agregar productos al carrito de otro usuario" });
+    }
 
     if (!userId || !items || items.length === 0) {
       return res.status(400).json({ message: "Faltan datos del carrito" });
@@ -98,11 +108,15 @@ const addToCart = async (req, res) => {
   }
 };
 
-
 // 👉 Obtener el carrito de un usuario
 const getCartByUser = async (req, res) => {
   try {
     const { userId } = req.params;
+
+    // Verificar que el usuario solo acceda a su propio carrito, a menos que sea admin/secretaria
+    if (req.user._id.toString() !== userId && !req.user.isAdmin && !req.user.isSecretaria) {
+      return res.status(403).json({ message: "No tienes permisos para ver este carrito" });
+    }
 
     const cart = await Cart.find({ userId })
       .populate("items.productId")
@@ -122,6 +136,11 @@ const updateCartItems = async (req, res) => {
 
     const cart = await Cart.findById(cartId);
     if (!cart) return res.status(404).json({ message: "Carrito no encontrado" });
+
+    // Verificar que el usuario solo actualice su propio carrito, a menos que sea admin/secretaria
+    if (req.user._id.toString() !== cart.userId.toString() && !req.user.isAdmin && !req.user.isSecretaria) {
+      return res.status(403).json({ message: "No tienes permisos para modificar este carrito" });
+    }
 
     const itemIndex = cart.items.findIndex(item => item.productId.toString() === productId);
 
@@ -162,7 +181,6 @@ const updateCartItems = async (req, res) => {
   }
 };
 
-
 // 👉 Confirmar compra (checkout)
 const checkoutCart = async (req, res) => {
   try {
@@ -177,6 +195,11 @@ const checkoutCart = async (req, res) => {
 
     const cart = await Cart.findById(cartId).populate("items.productId");
     if (!cart) return res.status(404).json({ message: "Carrito no encontrado" });
+
+    // Verificar que el usuario solo haga checkout de su propio carrito
+    if (req.user._id.toString() !== cart.userId.toString() && !req.user.isAdmin && !req.user.isSecretaria) {
+      return res.status(403).json({ message: "No puedes confirmar la compra de otro usuario" });
+    }
 
     // Check if the cart is in a valid state for checkout
     if (["pagado", "preparacion", "entregado", "cancelado"].includes(cart.status)) {
@@ -231,6 +254,7 @@ const checkoutCart = async (req, res) => {
   }
 };
 
+// 👉 Actualizar estado del carrito
 const updateCartStatus = async (req, res) => {
   const { cartId } = req.params;
   const { status } = req.body;
@@ -264,7 +288,8 @@ const updateCartStatus = async (req, res) => {
   }
 };
 
-// Agregar rating a productos en el carrito
+// 👉 Agregar rating a productos en el carrito
+// 👉 Agregar rating a productos en el carrito
 const addCartProductRating = async (req, res) => {
   const { cartId, productId } = req.params;
   const { stars, comment } = req.body;
@@ -272,6 +297,11 @@ const addCartProductRating = async (req, res) => {
   try {
     const cart = await Cart.findById(cartId);
     if (!cart) return res.status(404).json({ message: 'Carrito no encontrado' });
+
+    // Verificar que el usuario solo califique su propio carrito
+    if (req.user._id.toString() !== cart.userId.toString()) {
+      return res.status(403).json({ message: "Solo puedes calificar tus propios pedidos" });
+    }
 
     // Verificar que el producto está en el carrito
     const productInCart = cart.items.some(item =>
@@ -296,17 +326,23 @@ const addCartProductRating = async (req, res) => {
       cart.ratings[existingRatingIndex] = {
         productId,
         stars,
-        comment,
+        comment: comment || '', // Asegurar que comment siempre tenga valor
         ratedAt: new Date()
       };
     } else {
-      cart.ratings.push({ productId, stars, comment });
+      cart.ratings.push({ 
+        productId, 
+        stars, 
+        comment: comment || '',
+        ratedAt: new Date()
+      });
     }
 
     await cart.save();
     res.status(200).json(cart);
   } catch (error) {
-    res.status(500).json({ message: 'Error al calificar el producto', error });
+    console.error('Error al calificar producto:', error);
+    res.status(500).json({ message: 'Error al calificar el producto', error: error.message });
   }
 };
 

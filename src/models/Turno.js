@@ -12,7 +12,7 @@ const TurnoSchema = new Schema({
     ref: 'Especialista',
     required: true
   },
-  userId: { // Usuario que creó el turno (puede ser admin, médico o el mismo paciente)
+  userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true
@@ -22,7 +22,6 @@ const TurnoSchema = new Schema({
     required: true,
     validate: {
       validator: function (value) {
-        // Solo validar fecha futura para turnos pendientes
         return this.estado !== 'pendiente' || value > new Date();
       },
       message: 'La fecha debe ser futura para turnos pendientes'
@@ -50,6 +49,32 @@ const TurnoSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'EvaluacionMedica'
   },
+  // NUEVOS CAMPOS AGREGADOS EN EL NIVEL PRINCIPAL
+  diagnostico: {
+    type: String,
+    trim: true
+  },
+  tratamiento: {
+    type: String,
+    trim: true
+  },
+  observaciones: {
+    type: String,
+    trim: true
+  },
+  documentosAdjuntos: [{
+    nombre: String,
+    tipo: {
+      type: String,
+      enum: ['receta', 'estudio', 'informe', 'otro'],
+      default: 'receta'
+    },
+    url: String,
+    fecha: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   consulta: {
     productos: [{
       productoId: {
@@ -62,11 +87,17 @@ const TurnoSchema = new Schema({
         min: 1
       },
       precioUnitario: Number,
-      nombreProducto: String // Para mantener histórico
+      nombreProducto: String
     }],
     total: {
       type: Number,
       default: 0
+    },
+    // NUEVO CAMPO AGREGADO DENTRO DE CONSULTA
+    descuento: {
+      type: Number,
+      default: 0,
+      min: 0
     },
     formaPago: {
       type: String,
@@ -82,7 +113,31 @@ const TurnoSchema = new Schema({
       type: Boolean,
       default: false
     },
-    notasConsulta: String
+    notasConsulta: String,
+    // MANTENER LOS CAMPOS EXISTENTES QUE YA TENÍAS EN CONSULTA
+    diagnostico: {
+      type: String,
+      trim: true
+    },
+    tratamiento: {
+      type: String,
+      trim: true
+    },
+    observaciones: {
+      type: String,
+      trim: true
+    },
+    fechaConsulta: {
+      type: Date
+    },
+    comprobantePago: {  // ✅ NUEVO CAMPO PARA COMPROBANTE
+      url: String,
+      nombreArchivo: String,
+      fechaSubida: {
+        type: Date,
+        default: Date.now
+      }
+    }
   }
 }, {
   timestamps: true,

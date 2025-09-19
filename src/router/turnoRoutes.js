@@ -52,7 +52,7 @@ router.post('/admin', authenticate, isAdminOrMedicoOrSecretaria, createTurnoAdmi
 router.post('/paciente', authenticate, isPacienteWithProfile, createTurno);
 
 // Agregar productos a un turno (consultorio)
-router.post('/:id/agregar-productos', authenticate, isAdminOrMedico, agregarProductosATurno);
+router.post('/:id/agregar-productos', authenticate, isAdminOrMedicoOrSecretaria, agregarProductosATurno);
 
 // Marcar como pagado (caja)
 router.put('/:id/marcar-pagado', authenticate, isAdminOrSecretaria, marcarComoPagado);

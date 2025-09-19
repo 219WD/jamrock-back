@@ -144,8 +144,6 @@ const addProductReview = async (req, res) => {
   }
 };
 
-
-
 module.exports = {
   getProducts,
   getProductById,

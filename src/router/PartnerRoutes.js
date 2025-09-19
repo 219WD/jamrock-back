@@ -5,27 +5,31 @@ const {
   getAllPartners,
   getPartnerById,
   getPartnerByUserId,
+  getMyPartnerData, // Nueva función
   updatePartner,
-  deletePartner
+  deletePartner,
 } = require('../controllers/PartnerController');
-const isAdmin = require('../middlewares/isAdmin');
+const { authenticate, isAdmin, isAdminOrSecretaria } = require('../middlewares/authMiddleware');
 
-// Crear un nuevo partner
-router.post('/createPartner', createPartner);
+// Crear un nuevo partner (accesible para todos los autenticados)
+router.post('/createPartner', authenticate, createPartner);
 
-// Obtener todos los partners
-router.get('/getAllPartners', isAdmin, getAllPartners);
+// Obtener todos los partners (solo admin)
+router.get('/getAllPartners', authenticate, isAdmin, getAllPartners);
 
-// Obtener un partner por ID
-router.get('/getPartnerById/:id', isAdmin, getPartnerById);
+// Obtener un partner por ID (solo admin)
+router.get('/getPartnerById/:id', authenticate, isAdmin, getPartnerById);
 
-// Obtener partner por userId
-router.get('/user/getPartnerByUserId/:userId', getPartnerByUserId);
+// Obtener partner por userId (accesible para admin y secretarias)
+router.get('/user/getPartnerByUserId/:userId', authenticate, isAdminOrSecretaria, getPartnerByUserId);
 
-// Actualizar partner
-router.put('/updatePartner/:id', updatePartner);
+// Obtener MIS datos de partner (accesible para el usuario autenticado)
+router.get('/my-partner-data', authenticate, getMyPartnerData);
 
-// Eliminar partner
-router.delete('/deletePartner/:id', isAdmin, deletePartner);
+// Actualizar partner (accesible para todos los autenticados)
+router.put('/updatePartner/:id', authenticate, updatePartner);
+
+// Eliminar partner (solo admin)
+router.delete('/deletePartner/:id', authenticate, isAdmin, deletePartner);
 
 module.exports = router;

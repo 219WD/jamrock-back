@@ -1,7 +1,7 @@
 const Turno = require('../models/Turno');
 const Paciente = require('../models/Paciente');
 const Especialista = require('../models/Especialista');
-const Product = require('../models/Product'); 
+const Product = require('../models/Product');
 
 // En controllers/TurnoController.js
 const createTurno = async (req, res) => {
@@ -183,7 +183,6 @@ const getAllTurnos = async (req, res) => {
   }
 };
 
-
 // Obtener turno por ID
 const getTurnoById = async (req, res) => {
   try {
@@ -255,19 +254,21 @@ const getMisDatos = async (req, res) => {
 // Actualizar turno como médico
 const updateTurnoPorMedico = async (req, res) => {
   try {
-    const { 
-      estado, 
-      notas, 
-      reprocannRelacionado, 
-      fecha, 
+    const {
+      estado,
+      notas,
+      reprocannRelacionado,
+      fecha,
       motivo,
       precioConsulta,
-      diagnostico,
-      tratamiento,
-      observaciones
+      diagnostico,        // NUEVO - nivel principal
+      tratamiento,        // NUEVO - nivel principal
+      observaciones,      // NUEVO - nivel principal
+      documentosAdjuntos, // NUEVO
+      descuento           // NUEVO - dentro de consulta
     } = req.body;
-    
-    const medicoId = req.user._id; // ID del médico autenticado
+
+    const medicoId = req.user._id;
 
     const turno = await Turno.findById(req.params.id)
       .populate('especialistaId', 'userId');
@@ -287,12 +288,18 @@ const updateTurnoPorMedico = async (req, res) => {
       });
     }
 
-    // Campos actualizables
+    // Campos actualizables del nivel principal
     if (estado) turno.estado = estado;
     if (notas !== undefined) turno.notas = notas;
     if (reprocannRelacionado !== undefined) turno.reprocannRelacionado = reprocannRelacionado;
     if (fecha) turno.fecha = new Date(fecha);
     if (motivo) turno.motivo = motivo;
+
+    // NUEVOS CAMPOS EN NIVEL PRINCIPAL
+    if (diagnostico !== undefined) turno.diagnostico = diagnostico;
+    if (tratamiento !== undefined) turno.tratamiento = tratamiento;
+    if (observaciones !== undefined) turno.observaciones = observaciones;
+    if (documentosAdjuntos !== undefined) turno.documentosAdjuntos = documentosAdjuntos;
 
     // Actualizar datos de consulta
     if (!turno.consulta) {
@@ -303,16 +310,22 @@ const updateTurnoPorMedico = async (req, res) => {
       turno.consulta.precioConsulta = precioConsulta;
     }
 
-    if (diagnostico !== undefined) {
-      turno.consulta.diagnostico = diagnostico;
+    // Mantener los campos existentes dentro de consulta (por compatibilidad)
+    if (req.body.consultaDiagnostico !== undefined) {
+      turno.consulta.diagnostico = req.body.consultaDiagnostico;
     }
 
-    if (tratamiento !== undefined) {
-      turno.consulta.tratamiento = tratamiento;
+    if (req.body.consultaTratamiento !== undefined) {
+      turno.consulta.tratamiento = req.body.consultaTratamiento;
     }
 
-    if (observaciones !== undefined) {
-      turno.consulta.observaciones = observaciones;
+    if (req.body.consultaObservaciones !== undefined) {
+      turno.consulta.observaciones = req.body.consultaObservaciones;
+    }
+
+    // NUEVO CAMPO DESCUENTO DENTRO DE CONSULTA
+    if (descuento !== undefined) {
+      turno.consulta.descuento = descuento;
     }
 
     // Si se está completando el turno, registrar fecha de consulta
@@ -340,10 +353,10 @@ const updateTurnoPorSecretaria = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
     // Validar que la secretaria solo pueda modificar ciertos campos
     const allowedUpdates = ['fecha', 'motivo', 'notas', 'estado', 'reprocannRelacionado'];
-    const isValidUpdate = Object.keys(updates).every(update => 
+    const isValidUpdate = Object.keys(updates).every(update =>
       allowedUpdates.includes(update)
     );
 
@@ -502,7 +515,7 @@ const cancelarTurnoPorPaciente = async (req, res) => {
 // Agregar productos a un turno (consultorio)
 const agregarProductosATurno = async (req, res) => {
   try {
-    const { productos, formaPago, notasConsulta, precioConsulta } = req.body;
+    const { productos, formaPago, notasConsulta, precioConsulta, descuento = 0, reemplazarProductos = true } = req.body; // ✅ CAMBIO CRÍTICO: default = true
     const turnoId = req.params.id;
 
     // Validar que el turno existe
@@ -514,14 +527,7 @@ const agregarProductosATurno = async (req, res) => {
       });
     }
 
-    // Desactivar validación de fecha futura para turnos completados
-    if (turno.estado === 'completado') {
-      turno.schema.path('fecha').validate(function(value) {
-        return true;
-      });
-    }
-
-    // Validar productos
+    // Validar productos - PERMITIR ARRAY VACÍO PARA SOLO ACTUALIZAR OTROS CAMPOS
     if (!productos || !Array.isArray(productos)) {
       return res.status(400).json({
         success: false,
@@ -529,60 +535,121 @@ const agregarProductosATurno = async (req, res) => {
       });
     }
 
-    // Procesar productos...
-    let total = precioConsulta || 0; // Incluir precio de consulta en el total
+    let subtotal = precioConsulta || turno.consulta?.precioConsulta || 0;
     const productosProcesados = [];
-    
-    for (const item of productos) {
-      const producto = await Product.findById(item.productoId);
-      if (!producto) {
-        return res.status(404).json({
-          success: false,
-          error: `Producto no encontrado: ${item.productoId}`
+
+    // Solo procesar productos si hay productos en el array
+    if (productos.length > 0) {
+      // 🔹 PRIMERA PASADA: Verificar stock de todos los productos ANTES de actualizar
+      const productosVerificados = [];
+
+      for (const item of productos) {
+        const producto = await Product.findById(item.productoId);
+        if (!producto) {
+          return res.status(404).json({
+            success: false,
+            error: `Producto no encontrado: ${item.productoId}`
+          });
+        }
+
+        // Validar stock disponible
+        if (producto.stock < item.cantidad) {
+          return res.status(400).json({
+            success: false,
+            error: `Stock insuficiente para ${producto.title}. Disponible: ${producto.stock}, Solicitado: ${item.cantidad}`
+          });
+        }
+
+        productosVerificados.push({
+          producto,
+          cantidad: item.cantidad,
+          dosis: item.dosis || ''
         });
       }
 
-      // Validar stock
-      if (producto.stock < item.cantidad) {
-        return res.status(400).json({
-          success: false,
-          error: `Stock insuficiente para ${producto.title}`
+      // 🔹 SEGUNDA PASADA: Actualizar stock y procesar productos
+      for (const { producto, cantidad, dosis } of productosVerificados) {
+        // Descontar stock del producto
+        producto.stock -= cantidad;
+        await producto.save();
+
+        // Calcular subtotal
+        subtotal += producto.price * cantidad;
+
+        // Agregar a productos procesados
+        productosProcesados.push({
+          productoId: producto._id,
+          cantidad: cantidad,
+          precioUnitario: producto.price,
+          nombreProducto: producto.title,
+          dosis: dosis
         });
       }
+    }
 
-      total += producto.price * item.cantidad;
-      
-      productosProcesados.push({
-        productoId: producto._id,
-        cantidad: item.cantidad,
-        precioUnitario: producto.price,
-        nombreProducto: producto.title,
-        dosis: item.dosis || ''
+    // Validar y aplicar descuento
+    if (descuento < 0 || descuento > subtotal) {
+      return res.status(400).json({
+        success: false,
+        error: 'El descuento debe ser un valor positivo no mayor al subtotal'
       });
     }
 
-    // Actualizar turno
+    const total = Math.max(0, subtotal - descuento);
+
+    // 🔥 CAMBIO CRÍTICO: Decidir si reemplazar o concatenar productos
+    let nuevosProductos;
+    if (reemplazarProductos) {
+      // ✅ REEMPLAZAR productos existentes
+      nuevosProductos = productosProcesados;
+    } else {
+      // ✅ CONCATENAR a productos existentes (solo si explícitamente se pide false)
+      nuevosProductos = [...(turno.consulta?.productos || []), ...productosProcesados];
+    }
+
+    // Actualizar turno con los productos
     turno.consulta = {
-      ...turno.consulta, // Mantener datos existentes
-      productos: productosProcesados,
-      total,
+      ...turno.consulta,
+      productos: nuevosProductos, // ✅ Usar la nueva variable
+      subtotal: subtotal,
+      descuento: descuento,
+      total: total,
       precioConsulta: precioConsulta || turno.consulta?.precioConsulta || 0,
-      formaPago: formaPago || 'efectivo',
-      pagado: false,
-      notasConsulta: notasConsulta || ''
+      formaPago: formaPago || turno.consulta?.formaPago || 'efectivo',
+      pagado: turno.consulta?.pagado || false,
+      notasConsulta: notasConsulta || turno.consulta?.notasConsulta || ''
     };
 
-    turno.estado = 'completado';
     const turnoActualizado = await turno.save();
 
     res.status(200).json({
       success: true,
       data: turnoActualizado,
-      message: 'Productos agregados correctamente'
+      message: reemplazarProductos ? 
+        'Productos actualizados y stock actualizado correctamente' : 
+        'Productos agregados y stock actualizado correctamente',
+      productosActualizados: productosProcesados
     });
 
   } catch (err) {
     console.error('Error en agregarProductosATurno:', err);
+    
+    // 🔥 RESTAURAR STOCK EN CASO DE ERROR
+    if (productos && productos.length > 0) {
+      console.log('Restaurando stock debido a error...');
+      for (const item of productos) {
+        try {
+          const producto = await Product.findById(item.productoId);
+          if (producto) {
+            producto.stock += item.cantidad;
+            await producto.save();
+          }
+        } catch (restoreError) {
+          console.error('Error restaurando stock:', restoreError);
+        }
+      }
+    }
+    
     res.status(500).json({
       success: false,
       error: 'Error al procesar los productos',
@@ -592,9 +659,11 @@ const agregarProductosATurno = async (req, res) => {
 };
 
 // Marcar consulta como pagada (para caja)
+// 📝 EN controllers/TurnoController.js - MODIFICAR marcarComoPagado
 const marcarComoPagado = async (req, res) => {
   try {
     const turnoId = req.params.id;
+    const { comprobanteUrl, nombreComprobante } = req.body;
 
     const turno = await Turno.findById(turnoId);
     if (!turno) {
@@ -604,14 +673,35 @@ const marcarComoPagado = async (req, res) => {
       });
     }
 
-    if (!turno.consulta || turno.consulta.productos.length === 0) {
+    // ✅ ELIMINAR esta validación que impide turnos sin productos
+    // if (!turno.consulta || turno.consulta.productos.length === 0) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     error: 'El turno no tiene productos asociados'
+    //   });
+    // }
+
+    // ✅ PERMITIR turnos sin productos pero con precio de consulta
+    const tieneProductos = turno.consulta?.productos?.length > 0;
+    const tienePrecioConsulta = turno.consulta?.precioConsulta > 0;
+    
+    if (!tieneProductos && !tienePrecioConsulta) {
       return res.status(400).json({
         success: false,
-        error: 'El turno no tiene productos asociados'
+        error: 'El turno no tiene productos ni precio de consulta asociado'
       });
     }
 
+    // ✅ Actualizar con datos del comprobante
     turno.consulta.pagado = true;
+    if (comprobanteUrl) {
+      turno.consulta.comprobantePago = {
+        url: comprobanteUrl,
+        nombreArchivo: nombreComprobante || 'Comprobante de pago',
+        fechaSubida: new Date()
+      };
+    }
+
     const turnoActualizado = await turno.save();
 
     res.status(200).json({

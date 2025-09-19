@@ -1,5 +1,4 @@
 const express = require('express');
-
 const router = express.Router();
 const {
   getAllUsers,
@@ -8,30 +7,29 @@ const {
   updatePartnerStatus,
   updatePendingStatus,
   isSecretariaStatus,
-  searchUsers
+  searchUsers,
 } = require('../controllers/UserController');
-const { authenticate, isAdmin, isAdminOrMedico } = require('../middlewares/authMiddleware');
+const { authenticate, isAdmin, isAdminOrSecretaria, isAdminOrMedicoOrSecretaria } = require('../middlewares/authMiddleware');
 
-// Obtener todos los usuarios (accesible para admin y médicos)
-router.get('/getUsers', authenticate, isAdminOrMedico, getAllUsers);
+// Obtener todos los usuarios (accesible para admin y secretarias)
+router.get('/getUsers', authenticate, isAdminOrMedicoOrSecretaria, getAllUsers);
 
-// Obtener un usuario por ID (accesible para todos los usuarios autenticados)
-router.get('/getUser/:id', getUserById);
+// Obtener un usuario por ID (accesible para admin y secretarias)
+router.get('/getUser/:id', authenticate, isAdminOrMedicoOrSecretaria, getUserById);
 
-// Search (accesible para admin y médicos)
-router.get('/search', authenticate, isAdminOrMedico, searchUsers);
+// Buscar usuarios por nombre o email (accesible para admin y secretarias)
+router.get('/search', authenticate, isAdminOrMedicoOrSecretaria, searchUsers);
 
-// Actualizar isPartner (PATCH) - Alternar estado (solo admin)
-router.patch('/togglePartner/:id', authenticate, isAdmin, updatePartnerStatus);
+// Actualizar isPartner (accesible para admin y secretarias)
+router.patch('/togglePartner/:id', authenticate, isAdminOrSecretaria, updatePartnerStatus);
 
-// Actualizar isAdmin (PATCH) (solo admin)
+// Actualizar isAdmin (solo admin)
 router.patch('/isAdmin/:id', authenticate, isAdmin, updateAdminStatus);
 
-
-// Actualizar isSecretaria (PATCH) - Alternar estado (solo admin)
+// Actualizar isSecretaria (solo admin)
 router.patch('/isSecretaria/:id', authenticate, isAdmin, isSecretariaStatus);
 
-// Actualizar isPending (PATCH) (solo admin)
+// Actualizar isPending (solo admin)
 router.patch('/isPending/:id', authenticate, isAdmin, updatePendingStatus);
 
 module.exports = router;

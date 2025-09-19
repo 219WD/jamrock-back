@@ -1,13 +1,13 @@
 const { Router } = require("express");
-const mercadopago = require("mercadopago");
+const { MercadoPagoConfig, Preference } = require("mercadopago");
 const dotenv = require("dotenv");
 dotenv.config();
 
 const Mercado_Pago = Router();
 
-// Configuración clásica
-mercadopago.configure({
-  access_token: process.env.ACCESS_TOKEN || "",
+// Configuración moderna con nueva sintaxis
+const client = new MercadoPagoConfig({
+  accessToken: process.env.ACCESS_TOKEN || "",
 });
 
 Mercado_Pago.post("/pagar", async (req, res) => {
@@ -18,7 +18,9 @@ Mercado_Pago.post("/pagar", async (req, res) => {
       return res.status(400).json({ error: "El carrito está vacío" });
     }
 
-    const preference = {
+    const preference = new Preference(client);
+
+    const preferenceData = {
       items: items.map((item) => ({
         title: item.title,
         description: item.description,
@@ -34,8 +36,8 @@ Mercado_Pago.post("/pagar", async (req, res) => {
       auto_return: "approved",
     };
 
-    const response = await mercadopago.preferences.create(preference);
-    return res.status(200).json({ init_point: response.body.init_point });
+    const response = await preference.create({ body: preferenceData });
+    return res.status(200).json({ init_point: response.init_point });
   } catch (error) {
     console.error("Error al procesar la solicitud:", error.message);
     return res.status(500).json({ error: "Hubo un error al procesar la solicitud" });

@@ -10,13 +10,18 @@ const {
   updateCartStatus,
   addCartProductRating
 } = require("../controllers/cartController");
-const isAdmin = require("../middlewares/isAdmin");
+
+// Importar middlewares
+const { authenticate, isAdminOrSecretaria } = require("../middlewares/authMiddleware");
+
+// 🔐 TODAS las rutas requieren autenticación
+router.use(authenticate);
 
 // POST /cart/addToCart → crear carrito
 router.post("/addToCart", addToCart);
 
-// GET /cart/ → obtener todos los carritos
-router.get("/getAllCarts", getAllCarts);
+// GET /cart/ → obtener todos los carritos (solo admin y secretaria)
+router.get("/getAllCarts", isAdminOrSecretaria, getAllCarts);
 
 // GET /cart/user/:userId → obtener todos los carritos de un usuario
 router.get("/user/:userId", getCartByUser);
@@ -30,11 +35,10 @@ router.put("/update/:cartId", updateCartItems);
 // PUT /cart/checkout/:cartId → confirmar compra
 router.put("/checkout/:cartId", checkoutCart);
 
-// PUT /cart/status/:cartId → actualizar estado del carrito (solo admin)
-router.put("/status/:cartId", isAdmin, updateCartStatus);
+// PUT /cart/status/:cartId → actualizar estado del carrito (solo admin y secretaria)
+router.put("/status/:cartId", isAdminOrSecretaria, updateCartStatus);
 
 // POST /cart/:cartId/rate/:productId → agregar rating a productos en el carrito
-// Solo se puede calificar productos de pedidos entregados
 router.post('/:cartId/rate/:productId', addCartProductRating);
 
 module.exports = router;
