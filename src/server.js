@@ -34,11 +34,27 @@ const server = express();
 server.use(express.json());
 
 // Configuración de CORS
+// Configuración de CORS dinámica basada en entorno
 const corsOptions = {
-  origin: ['http://localhost:5173'], // Dominios permitidos
-  credentials: true, // Permitir credenciales (cookies, autorización, etc.)
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], // Métodos permitidos
-  allowedHeaders: ['Content-Type', 'Authorization'], // Encabezados permitidos
+  origin: function (origin, callback) {
+    // Lista de dominios permitidos
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'https://jamrock-club.vercel.app'
+    ];
+    
+    // Permitir solicitudes sin origen (como apps móviles o Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('No permitido por CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 server.use(cors(corsOptions));
