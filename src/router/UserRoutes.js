@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getAllUsers,
   getUserById,
+  updateUser,
   updateAdminStatus,
   updatePartnerStatus,
   updatePendingStatus,
@@ -19,6 +20,9 @@ router.get('/getUser/:id', authenticate, isAdminOrMedicoOrSecretaria, getUserByI
 
 // Buscar usuarios por nombre o email (accesible para admin y secretarias)
 router.get('/search', authenticate, isAdminOrMedicoOrSecretaria, searchUsers);
+
+// Actualizar datos del usuario (name, email) (accesible para el usuario autenticado)
+router.put('/updateUser/:id', authenticate, updateUser);
 
 // Actualizar isPartner (accesible para admin y secretarias)
 router.patch('/togglePartner/:id', authenticate, isAdminOrSecretaria, updatePartnerStatus);

@@ -4,8 +4,7 @@ const transporter = require('../config/nodemailer');
 // GET todos los usuarios
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password')
-      .populate('partnerData');
+    const users = await User.find().select('-password').populate('partnerData');
     res.status(200).json(users);
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener los usuarios' });
@@ -28,7 +27,6 @@ const searchUsers = async (req, res) => {
   const { q } = req.query;
 
   try {
-    // Búsqueda por nombre, email
     const users = await User.find({
       $or: [
         { name: { $regex: q, $options: 'i' } },
@@ -42,21 +40,61 @@ const searchUsers = async (req, res) => {
   }
 };
 
+// PUT actualizar datos del usuario (name, email)
+const updateUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-// PATCH cambiar isPartner (toggle) - Versión asíncrona
+    if (req.user._id.toString() !== req.params.id) {
+      return res.status(403).json({ error: 'No autorizado para editar este usuario' });
+    }
+
+    const { name, email } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Nombre y email son requeridos' });
+    }
+
+    const emailExists = await User.findOne({ email, _id: { $ne: user._id } });
+    if (emailExists) {
+      return res.status(400).json({ error: 'El email ya está en uso' });
+    }
+
+    user.name = name;
+    user.email = email;
+
+    await user.save();
+
+    res.status(200).json({
+      message: 'Usuario actualizado correctamente',
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isPartner: user.isPartner,
+        isAdmin: user.isAdmin,
+        isSecretaria: user.isSecretaria,
+        isPending: user.isPending,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Error al actualizar usuario',
+      details: err.message
+    });
+  }
+};
+
+// PATCH cambiar isPartner (toggle)
 const updatePartnerStatus = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    // Guardar el estado anterior
     const wasPartner = user.isPartner;
-    
-    // Alternar el valor de isPartner
     user.isPartner = !user.isPartner;
     await user.save();
 
-    // Responder inmediatamente al frontend
     res.status(200).json({
       message: `El usuario ahora es ${user.isPartner ? '' : 'no '}partner.`,
       user: {
@@ -69,9 +107,7 @@ const updatePartnerStatus = async (req, res) => {
       }
     });
 
-    // ENVIAR CORREOS DE FORMA ASÍNCRONA (después de responder)
     setTimeout(async () => {
-      // CORREO DE APROBACIÓN (cambiando de false a true)
       if (!wasPartner && user.isPartner) {
         try {
           const mailOptions = {
@@ -101,9 +137,7 @@ const updatePartnerStatus = async (req, res) => {
         } catch (emailError) {
           console.error('Error al enviar el correo de aprobación:', emailError);
         }
-      }
-      // CORREO DE REVOCACIÓN (cambiando de true a false)
-      else if (wasPartner && !user.isPartner) {
+      } else if (wasPartner && !user.isPartner) {
         try {
           const mailOptions = {
             from: process.env.EMAIL_USER,
@@ -127,8 +161,7 @@ const updatePartnerStatus = async (req, res) => {
           console.error('Error al enviar el correo de revocación:', emailError);
         }
       }
-    }, 100); // Pequeño delay para asegurar que la respuesta se envió primero
-
+    }, 100);
   } catch (err) {
     res.status(500).json({
       error: 'Error al actualizar isPartner',
@@ -143,7 +176,6 @@ const updateAdminStatus = async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    // Alternar el valor de isAdmin
     user.isAdmin = !user.isAdmin;
     await user.save();
 
@@ -172,12 +204,11 @@ const updatePendingStatus = async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    // Alternar el valor de isAdmin
     user.isPending = !user.isPending;
     await user.save();
 
     res.status(200).json({
-      message: `El usuario esta ${user.isAdmin ? '' : 'no '}pendiente.`,
+      message: `El usuario esta ${user.isPending ? '' : 'no '}pendiente.`,
       user: {
         _id: user._id,
         name: user.name,
@@ -204,7 +235,6 @@ const isSecretariaStatus = async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    // Alternar el valor de isSecretaria
     user.isSecretaria = !user.isSecretaria;
     await user.save();
 
@@ -226,11 +256,10 @@ const isSecretariaStatus = async (req, res) => {
   }
 };
 
-
-
 module.exports = {
   getAllUsers,
   getUserById,
+  updateUser,
   updateAdminStatus,
   updatePartnerStatus,
   updatePendingStatus,
