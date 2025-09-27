@@ -288,63 +288,54 @@ const updateCartStatus = async (req, res) => {
   }
 };
 
-// 👉 Agregar rating a productos en el carrito
-// 👉 Agregar rating a productos en el carrito
+// 👉 Rating desde carrito
 const addCartProductRating = async (req, res) => {
   const { cartId, productId } = req.params;
   const { stars, comment } = req.body;
 
   try {
     const cart = await Cart.findById(cartId);
-    if (!cart) return res.status(404).json({ message: 'Carrito no encontrado' });
+    const product = await Product.findById(productId);
 
-    // Verificar que el usuario solo califique su propio carrito
-    if (req.user._id.toString() !== cart.userId.toString()) {
-      return res.status(403).json({ message: "Solo puedes calificar tus propios pedidos" });
+    if (!cart || !product) {
+      return res.status(404).json({ message: 'Producto o carrito no encontrado' });
     }
 
-    // Verificar que el producto está en el carrito
-    const productInCart = cart.items.some(item =>
-      item.productId.toString() === productId.toString()
-    );
-
-    if (!productInCart) {
-      return res.status(400).json({ message: 'Producto no encontrado en este carrito' });
+    // 🔒 Validar que el carrito pertenezca al usuario o sea admin
+    if (req.user._id.toString() !== cart.userId.toString() && !req.user.isAdmin) {
+      return res.status(403).json({ message: 'No autorizado a calificar este carrito' });
     }
 
-    // Verificar que el carrito está entregado
+    // 🔒 Solo permitir rating si el carrito fue ENTREGADO
     if (cart.status !== 'entregado') {
-      return res.status(400).json({ message: 'Solo puedes calificar productos de pedidos entregados' });
+      return res.status(400).json({ message: 'Solo puedes calificar productos de carritos entregados' });
     }
 
-    // Actualizar o agregar rating
-    const existingRatingIndex = cart.ratings.findIndex(
-      r => r.productId.toString() === productId.toString()
-    );
+    // 🔹 Guardar/Actualizar rating en producto
+    await product.addCartRating(cartId, stars, comment);
 
-    if (existingRatingIndex !== -1) {
-      cart.ratings[existingRatingIndex] = {
-        productId,
-        stars,
-        comment: comment || '', // Asegurar que comment siempre tenga valor
-        ratedAt: new Date()
-      };
+    // 🔹 Guardar/Actualizar rating en carrito
+    const existingIndex = cart.ratings.findIndex(r => r.productId.toString() === productId);
+    if (existingIndex !== -1) {
+      cart.ratings[existingIndex] = { productId, stars, comment, ratedAt: new Date() };
     } else {
-      cart.ratings.push({ 
-        productId, 
-        stars, 
-        comment: comment || '',
-        ratedAt: new Date()
-      });
+      cart.ratings.push({ productId, stars, comment, ratedAt: new Date() });
     }
-
     await cart.save();
-    res.status(200).json(cart);
+
+    res.status(200).json({
+      success: true,
+      message: 'Calificación guardada',
+      productUpdate: {
+        rating: product.rating,
+        numReviews: product.numReviews
+      }
+    });
   } catch (error) {
-    console.error('Error al calificar producto:', error);
-    res.status(500).json({ message: 'Error al calificar el producto', error: error.message });
+    res.status(500).json({ success: false, message: 'Error al calificar', error: error.message });
   }
 };
+
 
 module.exports = {
   getAllCarts,

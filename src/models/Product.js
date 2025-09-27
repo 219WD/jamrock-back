@@ -38,19 +38,34 @@ const ProductSchema = new Schema({
   numReviews: {
     type: Number,
     default: 0
-  }
+  },
+  // 🔥 NUEVO: Referencias a los ratings en los carritos
+  cartRatings: [{
+    cartId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Cart'
+    },
+    stars: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    comment: String,
+    ratedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
   timestamps: true
 });
 
-// 🔹 MÉTODOS PARA MANEJO DE STOCK (SOLO ESTO SE AGREGA)
+// 🔹 MÉTODOS PARA MANEJO DE STOCK
 ProductSchema.methods = {
-  // Verificar si hay stock suficiente
   hasEnoughStock: function(quantity) {
     return this.stock >= quantity;
   },
   
-  // Reducir stock de forma segura
   reduceStock: async function(quantity) {
     if (!this.hasEnoughStock(quantity)) {
       throw new Error(`Stock insuficiente. Disponible: ${this.stock}, Solicitado: ${quantity}`);
@@ -59,10 +74,53 @@ ProductSchema.methods = {
     return await this.save();
   },
   
-  // Aumentar stock
   increaseStock: async function(quantity) {
     this.stock += quantity;
     return await this.save();
+  },
+
+  // 🔥 NUEVO: Método para agregar rating desde carrito
+addCartRating: async function(cartId, stars, comment = '') {
+  const parsedStars = Number(stars);
+  if (parsedStars < 1 || parsedStars > 5) {
+    throw new Error('El rating debe estar entre 1 y 5');
+  }
+
+  const existingRatingIndex = this.cartRatings.findIndex(
+    rating => rating.cartId.toString() === cartId.toString()
+  );
+
+  if (existingRatingIndex !== -1) {
+    this.cartRatings[existingRatingIndex] = {
+      cartId,
+      stars: parsedStars,
+      comment,
+      ratedAt: new Date()
+    };
+  } else {
+    this.cartRatings.push({
+      cartId,
+      stars: parsedStars,
+      comment,
+      ratedAt: new Date()
+    });
+  }
+
+  this.calculateAverageRating();
+  return await this.save();
+},
+
+  // 🔥 NUEVO: Calcular rating promedio basado en cartRatings
+  calculateAverageRating: function() {
+    if (this.cartRatings.length === 0) {
+      this.rating = 0;
+      this.numReviews = 0;
+      return;
+    }
+
+    const totalStars = this.cartRatings.reduce((sum, rating) => sum + rating.stars, 0);
+    this.rating = Number((totalStars / this.cartRatings.length).toFixed(2));
+    this.numReviews = this.cartRatings.length;
   }
 };
 

@@ -7,7 +7,7 @@ const {
   updateProduct,
   toggleProductStatus,
   deleteProduct,
-  addProductReview
+  debugProduct
 } = require('../controllers/productController');
 
 // Middlewares de autenticación/autorización (si los usas)
@@ -27,7 +27,10 @@ router.delete('/deleteProduct/:id', authenticate, isAdminOrSecretaria, deletePro
 router.patch('/toggle-status/:id', authenticate, isAdminOrSecretaria, toggleProductStatus);
 
 // Rutas para reseñas de productos
-router.post('/:id/review', addProductReview);
+// router.post('/:id/review', addProductReview);
+
+// Y en productRoutes.js agregar:
+router.get('/debug/:id', debugProduct);
 
 // 🔹 NUEVAS RUTAS PARA MANEJO DE STOCK (SOLO ESTO SE AGREGA)
 const Product = require('../models/Product');
