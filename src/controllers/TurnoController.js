@@ -515,20 +515,28 @@ const cancelarTurnoPorPaciente = async (req, res) => {
 // Agregar productos a un turno (consultorio)
 const agregarProductosATurno = async (req, res) => {
   try {
-    const { productos, formaPago, notasConsulta, precioConsulta, descuento = 0, reemplazarProductos = true } = req.body; // ✅ CAMBIO CRÍTICO: default = true
+    console.log("🔄 BACKEND: agregarProductosATurno INICIADO");
+    const { productos, formaPago, notasConsulta, precioConsulta, descuento = 0, reemplazarProductos = true } = req.body;
     const turnoId = req.params.id;
+
+    console.log("📦 Productos recibidos:", productos);
+    console.log("🆔 Turno ID:", turnoId);
 
     // Validar que el turno existe
     const turno = await Turno.findById(turnoId);
     if (!turno) {
+      console.log("❌ Turno no encontrado");
       return res.status(404).json({
         success: false,
         error: 'Turno no encontrado'
       });
     }
 
-    // Validar productos - PERMITIR ARRAY VACÍO PARA SOLO ACTUALIZAR OTROS CAMPOS
+    console.log("✅ Turno encontrado");
+
+    // Validar productos
     if (!productos || !Array.isArray(productos)) {
+      console.log("❌ Lista de productos inválida");
       return res.status(400).json({
         success: false,
         error: 'Lista de productos inválida'
@@ -540,20 +548,28 @@ const agregarProductosATurno = async (req, res) => {
 
     // Solo procesar productos si hay productos en el array
     if (productos.length > 0) {
+      console.log("🔍 Verificando stock de productos...");
+      
       // 🔹 PRIMERA PASADA: Verificar stock de todos los productos ANTES de actualizar
       const productosVerificados = [];
 
       for (const item of productos) {
+        console.log(`🔍 Verificando producto: ${item.productoId}, cantidad: ${item.cantidad}`);
+        
         const producto = await Product.findById(item.productoId);
         if (!producto) {
+          console.log(`❌ Producto no encontrado: ${item.productoId}`);
           return res.status(404).json({
             success: false,
             error: `Producto no encontrado: ${item.productoId}`
           });
         }
 
+        console.log(`📊 Producto encontrado: ${producto.title}, stock actual: ${producto.stock}`);
+
         // Validar stock disponible
         if (producto.stock < item.cantidad) {
+          console.log(`❌ Stock insuficiente: ${producto.title}. Disponible: ${producto.stock}, Solicitado: ${item.cantidad}`);
           return res.status(400).json({
             success: false,
             error: `Stock insuficiente para ${producto.title}. Disponible: ${producto.stock}, Solicitado: ${item.cantidad}`
@@ -567,11 +583,18 @@ const agregarProductosATurno = async (req, res) => {
         });
       }
 
-      // 🔹 SEGUNDA PASADA: Actualizar stock y procesar productos
+      console.log("✅ Todos los productos tienen stock suficiente");
+
+      // 🔹 SEGUNDA PASADA: Actualizar stock usando el MÉTODO del modelo
       for (const { producto, cantidad, dosis } of productosVerificados) {
-        // Descontar stock del producto
-        producto.stock -= cantidad;
-        await producto.save();
+        console.log(`🔄 Actualizando stock de ${producto.title}: ${producto.stock} -> ${producto.stock - cantidad}`);
+        
+        // ✅ USAR EL MÉTODO reduceStock EN LUGAR DE MANIPULAR DIRECTAMENTE
+        await producto.reduceStock(cantidad);
+
+        // Verificar stock después de la actualización
+        const productoActualizado = await Product.findById(producto._id);
+        console.log(`✅ Stock actualizado: ${productoActualizado.stock}`);
 
         // Calcular subtotal
         subtotal += producto.price * cantidad;
@@ -587,8 +610,11 @@ const agregarProductosATurno = async (req, res) => {
       }
     }
 
+    console.log("📊 Cálculo de totales...");
+    
     // Validar y aplicar descuento
     if (descuento < 0 || descuento > subtotal) {
+      console.log("❌ Descuento inválido");
       return res.status(400).json({
         success: false,
         error: 'El descuento debe ser un valor positivo no mayor al subtotal'
@@ -596,21 +622,22 @@ const agregarProductosATurno = async (req, res) => {
     }
 
     const total = Math.max(0, subtotal - descuento);
+    console.log(`💰 Subtotal: ${subtotal}, Descuento: ${descuento}, Total: ${total}`);
 
-    // 🔥 CAMBIO CRÍTICO: Decidir si reemplazar o concatenar productos
+    // Decidir si reemplazar o concatenar productos
     let nuevosProductos;
     if (reemplazarProductos) {
-      // ✅ REEMPLAZAR productos existentes
       nuevosProductos = productosProcesados;
+      console.log("🔄 Reemplazando productos existentes");
     } else {
-      // ✅ CONCATENAR a productos existentes (solo si explícitamente se pide false)
       nuevosProductos = [...(turno.consulta?.productos || []), ...productosProcesados];
+      console.log("➕ Concatenando productos a los existentes");
     }
 
     // Actualizar turno con los productos
     turno.consulta = {
       ...turno.consulta,
-      productos: nuevosProductos, // ✅ Usar la nueva variable
+      productos: nuevosProductos,
       subtotal: subtotal,
       descuento: descuento,
       total: total,
@@ -620,7 +647,9 @@ const agregarProductosATurno = async (req, res) => {
       notasConsulta: notasConsulta || turno.consulta?.notasConsulta || ''
     };
 
+    console.log("💾 Guardando turno actualizado...");
     const turnoActualizado = await turno.save();
+    console.log("✅ Turno guardado exitosamente");
 
     res.status(200).json({
       success: true,
@@ -631,21 +660,24 @@ const agregarProductosATurno = async (req, res) => {
       productosActualizados: productosProcesados
     });
 
+    console.log("🎉 BACKEND: agregarProductosATurno COMPLETADO EXITOSAMENTE");
+
   } catch (err) {
-    console.error('Error en agregarProductosATurno:', err);
+    console.error('❌ BACKEND: Error en agregarProductosATurno:', err);
     
-    // 🔥 RESTAURAR STOCK EN CASO DE ERROR
+    // 🔥 RESTAURAR STOCK EN CASO DE ERROR usando increaseStock
     if (productos && productos.length > 0) {
-      console.log('Restaurando stock debido a error...');
+      console.log('🔄 Restaurando stock debido a error...');
       for (const item of productos) {
         try {
           const producto = await Product.findById(item.productoId);
           if (producto) {
-            producto.stock += item.cantidad;
-            await producto.save();
+            console.log(`🔄 Restaurando ${item.cantidad} unidades a ${producto.title}`);
+            // ✅ USAR increaseStock EN LUGAR DE MANIPULAR DIRECTAMENTE
+            await producto.increaseStock(item.cantidad);
           }
         } catch (restoreError) {
-          console.error('Error restaurando stock:', restoreError);
+          console.error('❌ Error restaurando stock:', restoreError);
         }
       }
     }
@@ -659,7 +691,6 @@ const agregarProductosATurno = async (req, res) => {
 };
 
 // Marcar consulta como pagada (para caja)
-// 📝 EN controllers/TurnoController.js - MODIFICAR marcarComoPagado
 const marcarComoPagado = async (req, res) => {
   try {
     const turnoId = req.params.id;
