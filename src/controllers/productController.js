@@ -5,7 +5,7 @@ const getProducts = async (req, res) => {
   try {
     const products = await Product.find()
       .sort({ createdAt: -1 })
-      .populate('cartRatings.cartId', 'userId status'); // 🔥 Poblar ratings de carritos
+      .populate('cartRatings.cartId', 'userId status');
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener los productos', error });
@@ -15,7 +15,7 @@ const getProducts = async (req, res) => {
 const getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
-      .populate('cartRatings.cartId', 'userId status'); // 🔥 Poblar ratings de carritos
+      .populate('cartRatings.cartId', 'userId status');
     if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
     res.json(product);
   } catch (error) {
@@ -100,7 +100,7 @@ const toggleProductStatus = async (req, res) => {
 const addProductReview = async (req, res) => {
   const { rating, comment } = req.body;
   const { id: productId } = req.params;
-  const { cartId } = req.query; // Si viene del carrito
+  const { cartId } = req.query;
 
   try {
     const product = await Product.findById(productId);
@@ -139,7 +139,6 @@ const addProductReview = async (req, res) => {
   }
 };
 
-
 // Agregar temporalmente en productController.js para debug
 const debugProduct = async (req, res) => {
   try {
@@ -157,7 +156,6 @@ const debugProduct = async (req, res) => {
     res.status(500).json({ message: 'Error al obtener producto', error });
   }
 };
-
 
 module.exports = {
   getProducts,

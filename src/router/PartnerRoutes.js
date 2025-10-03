@@ -32,4 +32,37 @@ router.put('/updatePartner/:id', authenticate, updatePartner);
 // Eliminar partner (solo admin)
 router.delete('/deletePartner/:id', authenticate, isAdmin, deletePartner);
 
+// En PartnerRoutes.js - REEMPLAZA el endpoint de prueba con esta versión
+router.post('/test-email', async (req, res) => {
+  try {
+    const { email, name } = req.body;
+    
+    const testUser = {
+      _id: '68dc5ceaafc2bcf60ba74664',
+      name: name || 'Administrador',
+      email: email || 'jcanepa.web@gmail.com'
+    };
+
+    console.log('🧪 TEST: Iniciando prueba de email...');
+    console.log('📧 Datos de prueba:', testUser);
+    
+    // Importación directa para evitar problemas
+    const { sendPartnerRequestEmail } = require('../utils/emailSender');
+    const result = await sendPartnerRequestEmail(testUser);
+    
+    res.status(200).json({
+      message: 'Prueba de email completada',
+      success: result.success,
+      messageId: result.messageId,
+      error: result.error
+    });
+  } catch (error) {
+    console.error('❌ Error en prueba de email:', error);
+    res.status(500).json({
+      error: 'Error en prueba de email',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

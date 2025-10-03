@@ -62,7 +62,6 @@ const createTurno = async (req, res) => {
       message: 'Turno creado exitosamente'
     });
   } catch (err) {
-    console.error('Error en createTurno:', err);
     res.status(400).json({
       success: false,
       error: 'Error al crear turno',
@@ -135,7 +134,6 @@ const createTurnoAdmin = async (req, res) => {
       message: 'Turno creado exitosamente'
     });
   } catch (err) {
-    console.error('Error en createTurnoAdmin:', err);
     res.status(400).json({
       success: false,
       error: 'Error al crear turno',
@@ -211,18 +209,15 @@ const getTurnoById = async (req, res) => {
 // Obtener los datos del paciente actual autenticado
 const getMisDatos = async (req, res) => {
   try {
-    console.log("Buscando paciente para user:", req.user._id);
     const paciente = await Paciente.findOne({ userId: req.user._id });
 
     if (!paciente) {
-      console.log("Paciente no encontrado");
       return res.status(404).json({
         success: false,
         error: "Paciente no encontrado para este usuario"
       });
     }
 
-    console.log("Buscando turnos para paciente:", paciente._id);
     const turnos = await Turno.find({ pacienteId: paciente._id })
       .populate({
         path: 'especialistaId',
@@ -234,15 +229,12 @@ const getMisDatos = async (req, res) => {
       .populate('pacienteId')
       .sort({ fecha: -1 });
 
-    console.log(`Turnos encontrados: ${turnos.length}`);
-
     // Asegúrate de devolver el formato correcto
     res.status(200).json({
       success: true,
       data: turnos
     });
   } catch (err) {
-    console.error("Error en getMisDatos:", err);
     res.status(500).json({
       success: false,
       error: "Error al buscar turnos",
@@ -503,7 +495,6 @@ const cancelarTurnoPorPaciente = async (req, res) => {
       message: 'Turno cancelado exitosamente'
     });
   } catch (err) {
-    console.error('Error en cancelarTurnoPorPaciente:', err);
     res.status(400).json({
       success: false,
       error: 'Error al cancelar turno',
@@ -515,28 +506,20 @@ const cancelarTurnoPorPaciente = async (req, res) => {
 // Agregar productos a un turno (consultorio)
 const agregarProductosATurno = async (req, res) => {
   try {
-    console.log("🔄 BACKEND: agregarProductosATurno INICIADO");
     const { productos, formaPago, notasConsulta, precioConsulta, descuento = 0, reemplazarProductos = true } = req.body;
     const turnoId = req.params.id;
-
-    console.log("📦 Productos recibidos:", productos);
-    console.log("🆔 Turno ID:", turnoId);
 
     // Validar que el turno existe
     const turno = await Turno.findById(turnoId);
     if (!turno) {
-      console.log("❌ Turno no encontrado");
       return res.status(404).json({
         success: false,
         error: 'Turno no encontrado'
       });
     }
 
-    console.log("✅ Turno encontrado");
-
     // Validar productos
     if (!productos || !Array.isArray(productos)) {
-      console.log("❌ Lista de productos inválida");
       return res.status(400).json({
         success: false,
         error: 'Lista de productos inválida'
@@ -548,28 +531,20 @@ const agregarProductosATurno = async (req, res) => {
 
     // Solo procesar productos si hay productos en el array
     if (productos.length > 0) {
-      console.log("🔍 Verificando stock de productos...");
-      
       // 🔹 PRIMERA PASADA: Verificar stock de todos los productos ANTES de actualizar
       const productosVerificados = [];
 
       for (const item of productos) {
-        console.log(`🔍 Verificando producto: ${item.productoId}, cantidad: ${item.cantidad}`);
-        
         const producto = await Product.findById(item.productoId);
         if (!producto) {
-          console.log(`❌ Producto no encontrado: ${item.productoId}`);
           return res.status(404).json({
             success: false,
             error: `Producto no encontrado: ${item.productoId}`
           });
         }
 
-        console.log(`📊 Producto encontrado: ${producto.title}, stock actual: ${producto.stock}`);
-
         // Validar stock disponible
         if (producto.stock < item.cantidad) {
-          console.log(`❌ Stock insuficiente: ${producto.title}. Disponible: ${producto.stock}, Solicitado: ${item.cantidad}`);
           return res.status(400).json({
             success: false,
             error: `Stock insuficiente para ${producto.title}. Disponible: ${producto.stock}, Solicitado: ${item.cantidad}`
@@ -583,18 +558,10 @@ const agregarProductosATurno = async (req, res) => {
         });
       }
 
-      console.log("✅ Todos los productos tienen stock suficiente");
-
       // 🔹 SEGUNDA PASADA: Actualizar stock usando el MÉTODO del modelo
       for (const { producto, cantidad, dosis } of productosVerificados) {
-        console.log(`🔄 Actualizando stock de ${producto.title}: ${producto.stock} -> ${producto.stock - cantidad}`);
-        
         // ✅ USAR EL MÉTODO reduceStock EN LUGAR DE MANIPULAR DIRECTAMENTE
         await producto.reduceStock(cantidad);
-
-        // Verificar stock después de la actualización
-        const productoActualizado = await Product.findById(producto._id);
-        console.log(`✅ Stock actualizado: ${productoActualizado.stock}`);
 
         // Calcular subtotal
         subtotal += producto.price * cantidad;
@@ -610,11 +577,8 @@ const agregarProductosATurno = async (req, res) => {
       }
     }
 
-    console.log("📊 Cálculo de totales...");
-    
     // Validar y aplicar descuento
     if (descuento < 0 || descuento > subtotal) {
-      console.log("❌ Descuento inválido");
       return res.status(400).json({
         success: false,
         error: 'El descuento debe ser un valor positivo no mayor al subtotal'
@@ -622,16 +586,13 @@ const agregarProductosATurno = async (req, res) => {
     }
 
     const total = Math.max(0, subtotal - descuento);
-    console.log(`💰 Subtotal: ${subtotal}, Descuento: ${descuento}, Total: ${total}`);
 
     // Decidir si reemplazar o concatenar productos
     let nuevosProductos;
     if (reemplazarProductos) {
       nuevosProductos = productosProcesados;
-      console.log("🔄 Reemplazando productos existentes");
     } else {
       nuevosProductos = [...(turno.consulta?.productos || []), ...productosProcesados];
-      console.log("➕ Concatenando productos a los existentes");
     }
 
     // Actualizar turno con los productos
@@ -647,9 +608,7 @@ const agregarProductosATurno = async (req, res) => {
       notasConsulta: notasConsulta || turno.consulta?.notasConsulta || ''
     };
 
-    console.log("💾 Guardando turno actualizado...");
     const turnoActualizado = await turno.save();
-    console.log("✅ Turno guardado exitosamente");
 
     res.status(200).json({
       success: true,
@@ -660,24 +619,17 @@ const agregarProductosATurno = async (req, res) => {
       productosActualizados: productosProcesados
     });
 
-    console.log("🎉 BACKEND: agregarProductosATurno COMPLETADO EXITOSAMENTE");
-
   } catch (err) {
-    console.error('❌ BACKEND: Error en agregarProductosATurno:', err);
-    
     // 🔥 RESTAURAR STOCK EN CASO DE ERROR usando increaseStock
     if (productos && productos.length > 0) {
-      console.log('🔄 Restaurando stock debido a error...');
       for (const item of productos) {
         try {
           const producto = await Product.findById(item.productoId);
           if (producto) {
-            console.log(`🔄 Restaurando ${item.cantidad} unidades a ${producto.title}`);
             // ✅ USAR increaseStock EN LUGAR DE MANIPULAR DIRECTAMENTE
             await producto.increaseStock(item.cantidad);
           }
         } catch (restoreError) {
-          console.error('❌ Error restaurando stock:', restoreError);
         }
       }
     }
@@ -703,14 +655,6 @@ const marcarComoPagado = async (req, res) => {
         error: 'Turno no encontrado'
       });
     }
-
-    // ✅ ELIMINAR esta validación que impide turnos sin productos
-    // if (!turno.consulta || turno.consulta.productos.length === 0) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     error: 'El turno no tiene productos asociados'
-    //   });
-    // }
 
     // ✅ PERMITIR turnos sin productos pero con precio de consulta
     const tieneProductos = turno.consulta?.productos?.length > 0;
@@ -741,7 +685,6 @@ const marcarComoPagado = async (req, res) => {
       message: 'Turno marcado como pagado exitosamente'
     });
   } catch (err) {
-    console.error('Error en marcarComoPagado:', err);
     res.status(400).json({
       success: false,
       error: 'Error al marcar turno como pagado',
@@ -784,7 +727,6 @@ const getTurnosParaCaja = async (req, res) => {
       data: turnos
     });
   } catch (err) {
-    console.error('Error en getTurnosParaCaja:', err);
     res.status(500).json({
       success: false,
       error: 'Error al obtener turnos para caja',

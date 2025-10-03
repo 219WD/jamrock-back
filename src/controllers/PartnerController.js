@@ -1,59 +1,57 @@
 const mongoose = require('mongoose'); 
 const Partner = require('../models/Partner');
 const User = require('../models/User');
-const transporter = require('../config/nodemailer');
+const { sendPartnerRequestEmail } = require('../utils/emailSender');
 
 // Crear un nuevo partner
+// Crear un nuevo partner - VERSIÓN MEJORADA
 const createPartner = async (req, res) => {
   try {
+    console.log('🟡 Iniciando creación de partner...');
+    console.log('📝 Datos recibidos:', req.body);
+
     const partner = new Partner(req.body);
     await partner.save();
+    console.log('✅ Partner guardado en BD:', partner._id);
 
-    // Buscar y actualizar el usuario
     const user = await User.findById(req.body.userId);
     if (!user) {
+      console.error('❌ Usuario no encontrado:', req.body.userId);
       return res.status(404).json({ error: 'Usuario no encontrado para asociar el partner' });
     }
 
-    // Actualizar los campos del usuario - SOLO registrar datos, NO aprobar
+    console.log('👤 Usuario encontrado:', user.email);
+    
     user.partnerData = partner._id;
-    // NO establecer isPartner = true todavía (queda como false por defecto)
     await user.save();
+    console.log('✅ Partner asociado al usuario');
 
-    // Responder inmediatamente
+    // Enviar email con más control
+    console.log('📧 Iniciando envío de email de confirmación...');
+    const emailResult = await sendPartnerRequestEmail(user);
+    
+    if (!emailResult.success) {
+      console.warn(`⚠️ Partner creado pero email falló para: ${user.email}`);
+      console.warn(`⚠️ Error: ${emailResult.error}`);
+    } else {
+      console.log('✅ Email enviado exitosamente');
+    }
+
     res.status(201).json({
       message: 'Solicitud de partner enviada correctamente. Esperando aprobación.',
-      partner
+      partner,
+      emailSent: emailResult.success,
+      emailError: emailResult.error || null
     });
 
-    // ENVIAR CORREO DE SOLICITUD RECIBIDA DE FORMA ASÍNCRONA
-    setTimeout(async () => {
-      try {
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
-          to: user.email,
-          subject: 'Solicitud de Partner recibida - Jamrock',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #333; text-align: center;">¡Solicitud recibida!</h2>
-              <p>Hola ${user.name},</p>
-              <p>Hemos recibido tu solicitud para convertirte en socio de Jamrock.</p>
-              <p>Tu solicitud está ahora en revisión. Te notificaremos por correo una vez que sea procesada.</p>
-              <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
-              <p>¡Saludos cordiales!<br>El equipo de Jamrock</p>
-            </div>
-          `
-        };
-
-        await transporter.sendMail(mailOptions);
-        console.log(`Correo de solicitud recibida enviado a: ${user.email}`);
-      } catch (emailError) {
-        console.error('Error al enviar el correo de solicitud:', emailError);
-      }
-    }, 100);
-
   } catch (err) {
-    res.status(400).json({ error: 'Error al crear el partner', details: err.message });
+    console.error('❌ Error en createPartner:');
+    console.error('🔴 Error:', err.message);
+    console.error('🔴 Stack:', err.stack);
+    res.status(400).json({ 
+      error: 'Error al crear el partner', 
+      details: err.message 
+    });
   }
 };
 

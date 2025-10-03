@@ -1,35 +1,43 @@
-// config/nodemailer.js
+// config/nodemailer.js - VERSIÓN CORREGIDA
 const nodemailer = require('nodemailer');
 
-// Configuración del transporter
+console.log('🔧 Configurando Nodemailer...');
+console.log('📧 Email User:', process.env.EMAIL_USER);
+console.log('🔑 Email Password:', process.env.EMAIL_PASSWORD ? '✅ Configurada' : '❌ Faltante');
+
+// Crear el transporter
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // true for 465, false for other ports
+  port: 587, // ✅ CAMBIA de 465 a 587
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD
   },
+  debug: true,
+  logger: true,
   tls: {
-    // No fallar en certificados inválidos
     rejectUnauthorized: false
   }
 });
 
-// Verificación de la conexión al iniciar
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Error al verificar la conexión con el servidor SMTP:', error);
-  } else {
-    console.log('✔ Servidor SMTP configurado correctamente');
-    console.log(`✔ Cuenta de envío: ${process.env.EMAIL_USER}`);
+// Función de verificación mejorada
+const verifyTransporter = async () => {
+  try {
+    await transporter.verify();
+    console.log('✅ Servidor SMTP configurado correctamente');
+    console.log(`✅ Cuenta de envío: ${process.env.EMAIL_USER}`);
+    console.log('✅ Listo para enviar emails');
+    return true;
+  } catch (error) {
+    console.error('❌ ERROR DE CONEXIÓN SMTP:');
+    console.error('🔴 Error:', error.message);
+    console.error('🔴 Code:', error.code);
+    return false;
   }
-});
+};
 
-// Manejador de eventos para depuración
-transporter.on('token', (token) => {
-  console.log('Token generado:', token);
-});
+// Verificar inmediatamente
+verifyTransporter();
 
-// Exportar el transporter configurado
 module.exports = transporter;

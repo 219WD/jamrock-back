@@ -1,5 +1,11 @@
+console.log('🟢 UserController.js CARGADO - updatePartnerStatus disponible');
+
+const mongoose = require('mongoose');
 const User = require('../models/User');
-const transporter = require('../config/nodemailer');
+const { 
+  sendPartnerApprovalEmail, 
+  sendPartnerRevocationEmail 
+} = require('../utils/emailSender');
 
 // GET todos los usuarios
 const getAllUsers = async (req, res) => {
@@ -86,16 +92,87 @@ const updateUser = async (req, res) => {
 };
 
 // PATCH cambiar isPartner (toggle)
+// PATCH cambiar isPartner (toggle) - VERSIÓN CON DEBUG EXTREMO
 const updatePartnerStatus = async (req, res) => {
   try {
+    console.log('🎯🎯🎯 UPDATE PARTNER STATUS INICIADO 🎯🎯🎯');
+    console.log('📝 Params ID:', req.params.id);
+    console.log('🔐 User autenticado (req.user):', req.user ? {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email
+    } : 'NO HAY USER');
+    console.log('📦 Body recibido:', req.body);
+    console.log('🔑 Token headers:', req.headers.authorization ? 'PRESENTE' : 'AUSENTE');
+
+    // Verificar que el ID sea válido
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.log('❌ ID no válido:', req.params.id);
+      return res.status(400).json({ error: 'ID de usuario no válido' });
+    }
+
     const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!user) {
+      console.log('❌ Usuario no encontrado con ID:', req.params.id);
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    console.log('👤 Usuario encontrado en BD:', {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      isPartnerActual: user.isPartner,
+      isAdmin: user.isAdmin,
+      isSecretaria: user.isSecretaria
+    });
 
     const wasPartner = user.isPartner;
     user.isPartner = !user.isPartner;
     await user.save();
 
-    res.status(200).json({
+    console.log(`🔄 Estado de partner cambiado: ${wasPartner} -> ${user.isPartner}`);
+    console.log(`📧 Email del usuario para notificación: ${user.email}`);
+
+    // ENVÍO DE EMAIL - CON MÁS LOGGING
+    if (!wasPartner && user.isPartner) {
+      // Usuario APROBADO
+      console.log(`🎉📧 ENVIANDO EMAIL DE APROBACIÓN...`);
+      console.log(`📨 Destinatario: ${user.email}`);
+      
+      try {
+        const emailResult = await sendPartnerApprovalEmail(user);
+        console.log(`📩 Resultado del email:`, emailResult);
+        
+        if (!emailResult.success) {
+          console.warn(`⚠️ Email de aprobación falló: ${emailResult.error}`);
+        } else {
+          console.log(`✅✅✅ EMAIL DE APROBACIÓN ENVIADO EXITOSAMENTE ✅✅✅`);
+        }
+      } catch (emailError) {
+        console.error(`💥 ERROR en envío de email:`, emailError);
+      }
+    } else if (wasPartner && !user.isPartner) {
+      // Usuario REVOCADO
+      console.log(`🔴📧 ENVIANDO EMAIL DE REVOCACIÓN...`);
+      console.log(`📨 Destinatario: ${user.email}`);
+      
+      try {
+        const emailResult = await sendPartnerRevocationEmail(user);
+        console.log(`📩 Resultado del email:`, emailResult);
+        
+        if (!emailResult.success) {
+          console.warn(`⚠️ Email de revocación falló: ${emailResult.error}`);
+        } else {
+          console.log(`✅✅✅ EMAIL DE REVOCACIÓN ENVIADO EXITOSAMENTE ✅✅✅`);
+        }
+      } catch (emailError) {
+        console.error(`💥 ERROR en envío de email:`, emailError);
+      }
+    } else {
+      console.log('🔁 No se requiere envío de email - estado no cambió significativamente');
+    }
+
+    const response = {
       message: `El usuario ahora es ${user.isPartner ? '' : 'no '}partner.`,
       user: {
         _id: user._id,
@@ -105,64 +182,17 @@ const updatePartnerStatus = async (req, res) => {
         isAdmin: user.isAdmin,
         isSecretaria: user.isSecretaria,
       }
-    });
+    };
 
-    setTimeout(async () => {
-      if (!wasPartner && user.isPartner) {
-        try {
-          const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: user.email,
-            subject: '¡Felicidades! Eres ahora Partner oficial de Jamrock',
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #333; text-align: center;">¡Bienvenido a la familia Jamrock!</h2>
-                <p>Hola ${user.name},</p>
-                <p>Nos complace informarte que tu solicitud para convertirte en socio de Jamrock ha sido <strong>aprobada</strong>.</p>
-                <p>Ahora eres oficialmente un Socio y parte de nuestro exclusivo Club. Estamos encantados de tenerte con nosotros.</p>
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${process.env.FRONTEND_URL || 'https://tujamrock.com'}" 
-                     style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
-                    Acceder a la plataforma
-                  </a>
-                </div>
-                <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
-                <p>¡Saludos cordiales!<br>El equipo de Jamrock</p>
-              </div>
-            `
-          };
+    console.log('📤 Enviando respuesta al frontend:', response);
+    console.log('🎯🎯🎯 UPDATE PARTNER STATUS COMPLETADO 🎯🎯🎯');
 
-          await transporter.sendMail(mailOptions);
-          console.log(`Correo de aprobación enviado a: ${user.email}`);
-        } catch (emailError) {
-          console.error('Error al enviar el correo de aprobación:', emailError);
-        }
-      } else if (wasPartner && !user.isPartner) {
-        try {
-          const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: user.email,
-            subject: 'Estado de Partner actualizado - Jamrock',
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #333; text-align: center;">Actualización de estado</h2>
-                <p>Hola ${user.name},</p>
-                <p>Te informamos que tu estado de Socio en Jamrock ha sido actualizado.</p>
-                <p>Ya no tienes acceso privilegiado como socio del Club.</p>
-                <p>Si crees que esto es un error, por favor contacta con nosotros.</p>
-                <p>¡Saludos cordiales!<br>El equipo de Jamrock</p>
-              </div>
-            `
-          };
+    res.status(200).json(response);
 
-          await transporter.sendMail(mailOptions);
-          console.log(`Correo de revocación enviado a: ${user.email}`);
-        } catch (emailError) {
-          console.error('Error al enviar el correo de revocación:', emailError);
-        }
-      }
-    }, 100);
   } catch (err) {
+    console.error('❌❌❌ ERROR CRÍTICO en updatePartnerStatus:');
+    console.error('🔴 Error:', err.message);
+    console.error('🔴 Stack:', err.stack);
     res.status(500).json({
       error: 'Error al actualizar isPartner',
       details: err.message
