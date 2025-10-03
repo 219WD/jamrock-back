@@ -47,7 +47,7 @@ router.post('/test-email', async (req, res) => {
     console.log('📧 Datos de prueba:', testUser);
     
     // Importación directa para evitar problemas
-    const { sendPartnerRequestEmail } = require('../utils/emailSender');
+    const { sendPartnerRequestEmail } = require('../utils/emailJSSender');
     const result = await sendPartnerRequestEmail(testUser);
     
     res.status(200).json({

@@ -3,9 +3,9 @@ console.log('🟢 UserController.js CARGADO - updatePartnerStatus disponible');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const { 
-  sendPartnerApprovalEmail, 
-  sendPartnerRevocationEmail 
-} = require('../utils/emailSender');
+  sendPartnerStatusEmail,  // ✅ Nueva función reutilizable
+  sendPartnerRequestEmail 
+} = require('../utils/emailJSSender');
 
 // GET todos los usuarios
 const getAllUsers = async (req, res) => {
@@ -92,18 +92,10 @@ const updateUser = async (req, res) => {
 };
 
 // PATCH cambiar isPartner (toggle)
-// PATCH cambiar isPartner (toggle) - VERSIÓN CON DEBUG EXTREMO
 const updatePartnerStatus = async (req, res) => {
   try {
     console.log('🎯🎯🎯 UPDATE PARTNER STATUS INICIADO 🎯🎯🎯');
     console.log('📝 Params ID:', req.params.id);
-    console.log('🔐 User autenticado (req.user):', req.user ? {
-      id: req.user._id,
-      name: req.user.name,
-      email: req.user.email
-    } : 'NO HAY USER');
-    console.log('📦 Body recibido:', req.body);
-    console.log('🔑 Token headers:', req.headers.authorization ? 'PRESENTE' : 'AUSENTE');
 
     // Verificar que el ID sea válido
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -121,9 +113,7 @@ const updatePartnerStatus = async (req, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
-      isPartnerActual: user.isPartner,
-      isAdmin: user.isAdmin,
-      isSecretaria: user.isSecretaria
+      isPartnerActual: user.isPartner
     });
 
     const wasPartner = user.isPartner;
@@ -133,43 +123,19 @@ const updatePartnerStatus = async (req, res) => {
     console.log(`🔄 Estado de partner cambiado: ${wasPartner} -> ${user.isPartner}`);
     console.log(`📧 Email del usuario para notificación: ${user.email}`);
 
-    // ENVÍO DE EMAIL - CON MÁS LOGGING
-    if (!wasPartner && user.isPartner) {
-      // Usuario APROBADO
-      console.log(`🎉📧 ENVIANDO EMAIL DE APROBACIÓN...`);
-      console.log(`📨 Destinatario: ${user.email}`);
+    // ✅ CORRECCIÓN: Usar la nueva función reutilizable
+    if ((!wasPartner && user.isPartner) || (wasPartner && !user.isPartner)) {
+      const isApproved = !wasPartner && user.isPartner;
+      console.log(`📧 ENVIANDO EMAIL DE ${isApproved ? 'APROBACIÓN' : 'REVOCACIÓN'}...`);
       
-      try {
-        const emailResult = await sendPartnerApprovalEmail(user);
-        console.log(`📩 Resultado del email:`, emailResult);
-        
-        if (!emailResult.success) {
-          console.warn(`⚠️ Email de aprobación falló: ${emailResult.error}`);
-        } else {
-          console.log(`✅✅✅ EMAIL DE APROBACIÓN ENVIADO EXITOSAMENTE ✅✅✅`);
-        }
-      } catch (emailError) {
-        console.error(`💥 ERROR en envío de email:`, emailError);
-      }
-    } else if (wasPartner && !user.isPartner) {
-      // Usuario REVOCADO
-      console.log(`🔴📧 ENVIANDO EMAIL DE REVOCACIÓN...`);
-      console.log(`📨 Destinatario: ${user.email}`);
+      const emailResult = await sendPartnerStatusEmail(user, isApproved);
+      console.log(`📩 Resultado del email:`, emailResult);
       
-      try {
-        const emailResult = await sendPartnerRevocationEmail(user);
-        console.log(`📩 Resultado del email:`, emailResult);
-        
-        if (!emailResult.success) {
-          console.warn(`⚠️ Email de revocación falló: ${emailResult.error}`);
-        } else {
-          console.log(`✅✅✅ EMAIL DE REVOCACIÓN ENVIADO EXITOSAMENTE ✅✅✅`);
-        }
-      } catch (emailError) {
-        console.error(`💥 ERROR en envío de email:`, emailError);
+      if (!emailResult.success) {
+        console.warn(`⚠️ Email de ${isApproved ? 'aprobación' : 'revocación'} falló: ${emailResult.error}`);
+      } else {
+        console.log(`✅✅✅ EMAIL DE ${isApproved ? 'APROBACIÓN' : 'REVOCACIÓN'} ENVIADO EXITOSAMENTE ✅✅✅`);
       }
-    } else {
-      console.log('🔁 No se requiere envío de email - estado no cambió significativamente');
     }
 
     const response = {
@@ -184,15 +150,12 @@ const updatePartnerStatus = async (req, res) => {
       }
     };
 
-    console.log('📤 Enviando respuesta al frontend:', response);
     console.log('🎯🎯🎯 UPDATE PARTNER STATUS COMPLETADO 🎯🎯🎯');
-
     res.status(200).json(response);
 
   } catch (err) {
     console.error('❌❌❌ ERROR CRÍTICO en updatePartnerStatus:');
     console.error('🔴 Error:', err.message);
-    console.error('🔴 Stack:', err.stack);
     res.status(500).json({
       error: 'Error al actualizar isPartner',
       details: err.message

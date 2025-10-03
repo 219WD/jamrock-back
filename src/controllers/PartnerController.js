@@ -1,10 +1,9 @@
 const mongoose = require('mongoose'); 
 const Partner = require('../models/Partner');
 const User = require('../models/User');
-const { sendPartnerRequestEmail } = require('../utils/emailSender');
+const { sendPartnerRequestEmail } = require('../utils/emailJSSender');
 
 // Crear un nuevo partner
-// Crear un nuevo partner - VERSIÓN MEJORADA
 const createPartner = async (req, res) => {
   try {
     console.log('🟡 Iniciando creación de partner...');
@@ -26,10 +25,10 @@ const createPartner = async (req, res) => {
     await user.save();
     console.log('✅ Partner asociado al usuario');
 
-    // Enviar email con más control
+    // ✅ CORRECCIÓN: Usar sendPartnerRequestEmail (no sendPartnerStatusEmail)
     console.log('📧 Iniciando envío de email de confirmación...');
-    const emailResult = await sendPartnerRequestEmail(user);
-    
+    const emailResult = await sendPartnerRequestEmail(user); // ✅ SOLO user, sin isApproved
+
     if (!emailResult.success) {
       console.warn(`⚠️ Partner creado pero email falló para: ${user.email}`);
       console.warn(`⚠️ Error: ${emailResult.error}`);
